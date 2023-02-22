@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -341,21 +342,24 @@ func (c *celAdmissionController) Validate(
 
 	if len(deniedDecisions) > 0 {
 		// TODO: refactor admission.NewForbidden so the name extraction is reusable but the code/reason is customizable
-		var message string
-		deniedDecision := deniedDecisions[0]
-		if deniedDecision.Binding != nil {
-			message = fmt.Sprintf("ValidatingAdmissionPolicy '%s' with binding '%s' denied request: %s", deniedDecision.Definition.Name, deniedDecision.Binding.Name, deniedDecision.Message)
-		} else {
-			message = fmt.Sprintf("ValidatingAdmissionPolicy '%s' denied request: %s", deniedDecision.Definition.Name, deniedDecision.Message)
+		var messages []string
+		for _, deniedDecision := range deniedDecisions {
+			if deniedDecision.Binding != nil {
+				messages = append(messages, fmt.Sprintf("ValidatingAdmissionPolicy '%s' with binding '%s' denied request: %s", deniedDecision.Definition.Name, deniedDecision.Binding.Name, deniedDecision.Message))
+			} else {
+				messages = append(messages, fmt.Sprintf("ValidatingAdmissionPolicy '%s' denied request: %s", deniedDecision.Definition.Name, deniedDecision.Message))
+			}
 		}
-		err := admission.NewForbidden(a, errors.New(message)).(*k8serrors.StatusError)
-		reason := deniedDecision.Reason
+		err := admission.NewForbidden(a, errors.New(strings.Join(messages, ", "))).(*k8serrors.StatusError)
+		reason := deniedDecisions[0].Reason
+
 		if len(reason) == 0 {
 			reason = metav1.StatusReasonInvalid
 		}
 		err.ErrStatus.Reason = reason
 		err.ErrStatus.Code = ReasonToCode(reason)
-		err.ErrStatus.Details.Causes = append(err.ErrStatus.Details.Causes, metav1.StatusCause{Message: message})
+		err.ErrStatus.Details.Causes = append(err.ErrStatus.Details.Causes, metav1.StatusCause{Message: strings.Join(messages, ", ")})
+
 		return err
 	}
 	return nil
