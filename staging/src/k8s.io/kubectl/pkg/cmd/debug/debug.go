@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/genericiooptions"
@@ -128,6 +129,7 @@ type DebugOptions struct {
 	TTY             bool
 	Profile         string
 	Applier         ProfileApplier
+	SecurityContext string
 
 	explicitNamespace     bool
 	attachChanged         bool
@@ -192,6 +194,9 @@ func (o *DebugOptions) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&o.TargetContainer, "target", "", i18n.T("When using an ephemeral container, target processes in this container name."))
 	cmd.Flags().BoolVarP(&o.TTY, "tty", "t", o.TTY, i18n.T("Allocate a TTY for the debugging container."))
 	cmd.Flags().StringVar(&o.Profile, "profile", ProfileLegacy, i18n.T(`Debugging profile. Options are "legacy", "general", "baseline", "netadmin", or "restricted".`))
+
+	cmd.Flags().StringVar(&o.SecurityContext, "security-context", o.SecurityContext, i18n.T("SecurityContext Profile to use for debug container."))
+
 }
 
 // Complete finishes run-time initialization of debug.DebugOptions.
@@ -539,6 +544,21 @@ func (o *DebugOptions) debugByCopy(ctx context.Context, pod *corev1.Pod) (*corev
 // in the given pod.
 func (o *DebugOptions) generateDebugContainer(pod *corev1.Pod) (*corev1.Pod, *corev1.EphemeralContainer, error) {
 	name := o.computeDebugContainerName(pod)
+
+	var securityContextBytes []byte
+	securityContextBytes = []byte(o.SecurityContext)
+
+	securityContextBytes, err := yaml.ToJSON(securityContextBytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to parse %q: %v", o.SecurityContext, err)
+	}
+
+	var sc corev1.SecurityContext
+	err = json.Unmarshal(securityContextBytes, &sc)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to unmarshal %q: %v", securityContextBytes, err)
+	}
+
 	ec := &corev1.EphemeralContainer{
 		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
 			Name:                     name,
@@ -548,6 +568,7 @@ func (o *DebugOptions) generateDebugContainer(pod *corev1.Pod) (*corev1.Pod, *co
 			Stdin:                    o.Interactive,
 			TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 			TTY:                      o.TTY,
+			SecurityContext:          &sc,
 		},
 		TargetContainerName: o.TargetContainer,
 	}
