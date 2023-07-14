@@ -145,32 +145,8 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 	var allowedNewNodes []string
 	var numSurge int
 
-	// デバッグ
-	fmt.Println("===== Start nodeToDaemonPods Loop =====")
-
-	fmt.Println("    ----- nodeToDaemonPods -----")
-	for n, ps := range nodeToDaemonPods {
-		for _, p := range ps {
-			fmt.Printf("    %s: %s\n", n, p.Name)
-		}
-	}
-	fmt.Println("    ----------------------------")
-
 	for nodeName, pods := range nodeToDaemonPods {
-
-		// デバッグ
-		fmt.Printf("[デバッグ] Loop nodeToDaemonPods: nodeName: %s\n", nodeName)
-
 		newPod, oldPod, ok := findUpdatedPodsOnNode(ds, pods, hash)
-
-		// デバッグ
-		if newPod != nil {
-			fmt.Println("  [デバッグ] newPod: ", newPod.Name)
-		}
-		if oldPod != nil {
-			fmt.Println("  [デバッグ] oldPod: ", oldPod.Name)
-		}
-
 		if !ok {
 			// let the manage loop clean up this node, and treat it as a surge node
 			logger.V(3).Info("DaemonSet has excess pods on node, skipping to allow the core loop to process", "daemonset", klog.KObj(ds), "node", klog.KRef("", nodeName))
@@ -179,9 +155,6 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 		}
 		switch {
 		case oldPod == nil:
-			// デバッグ
-			fmt.Printf("  [デバッグ] oldPod == nil\n")
-
 			// we don't need to do anything to this node, the manage loop will handle it
 		case newPod == nil:
 			// this is a surge candidate
@@ -190,8 +163,6 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 				// the old pod isn't available, allow it to become a replacement
 				logger.V(5).Info("Pod on node is out of date and not available, allowing replacement", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
 
-				fmt.Println("  [デバッグ] !podutil.IsPodAvailable")
-
 				node, err := dsc.nodeLister.Get(nodeName)
 				if err != nil {
 					return fmt.Errorf("couldn't get node for nodeName %q: %v", nodeName, err)
@@ -199,14 +170,9 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 
 				shouldRun, shouldContinueRunning := NodeShouldRunDaemonPod(node, ds)
 
-				fmt.Printf("  [デバッグ !podutil.IsPodAvailable] shouldRun: %+v\n", shouldRun)
-				fmt.Printf("  [デバッグ !podutil.IsPodAvailable] shouldContinueRunning: %+v\n", shouldContinueRunning)
-
 				// daemonset should not run pod on the node
 				if !shouldRun {
-					fmt.Println("  [デバッグ !podutil.IsPodAvailable] !shouldRun")
-					// 後で3にする
-					logger.V(0).Info("Exclude the node from daemon pod updating", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
+					logger.V(3).Info("Exclude the node from daemon pod updating", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
 
 					// daemonset should continue running pod on the node
 					if shouldContinueRunning {
@@ -235,13 +201,9 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 
 				shouldRun, shouldContinueRunning := NodeShouldRunDaemonPod(node, ds)
 
-				fmt.Printf("  [デバッグ] shouldRun: %+v\n", shouldRun)
-				fmt.Printf("  [デバッグ] shouldContinueRunning: %+v\n", shouldContinueRunning)
-
 				// daemonset should not run pod on the node
 				if !shouldRun {
-					// 後で3にする
-					logger.V(0).Info("Exclude the node from daemon pod updating", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
+					logger.V(3).Info("Exclude the node from daemon pod updating", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
 
 					// daemonset should continue running pod on the node
 					if shouldContinueRunning {
@@ -270,10 +232,6 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 			oldPodsToDelete = append(oldPodsToDelete, oldPod.Name)
 		}
 	}
-
-	// デバッグ
-	fmt.Println("  [デバッグ] allowedNewNodes: ", allowedNewNodes)
-	fmt.Println("  [デバッグ] candidateNewNodes: ", candidateNewNodes)
 
 	// use any of the candidates we can, including the allowedNewNodes
 	logger.V(5).Info("DaemonSet allowing replacements", "daemonset", klog.KObj(ds), "replacements", len(allowedNewNodes), "maxSurge", maxSurge, "numSurge", numSurge, "candidates", len(candidateNewNodes))
