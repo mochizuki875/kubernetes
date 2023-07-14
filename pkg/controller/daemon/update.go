@@ -74,7 +74,7 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 			newPod, oldPod, ok := findUpdatedPodsOnNode(ds, pods, hash)
 			if !ok {
 				// let the manage loop clean up this node, and treat it as an unavailable node
-				logger.V(3).Info("DaemonSet has excess pods on node, skipping to allow the core loop to process", "daemonset", klog.KObj(ds), "node", klog.KRef("", nodeName))
+				logger.V(5).Info("DaemonSet has excess pods on node, skipping to allow the core loop to process", "daemonset", klog.KObj(ds), "node", klog.KRef("", nodeName))
 				numUnavailable++
 				continue
 			}
@@ -203,7 +203,7 @@ func (dsc *DaemonSetsController) rollingUpdate(ctx context.Context, ds *apps.Dae
 
 				// daemonset should not run pod on the node
 				if !shouldRun {
-					logger.V(3).Info("Exclude the node from daemon pod updating", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
+					logger.V(5).Info("Exclude the node from daemon pod updating", "daemonset", klog.KObj(ds), "pod", klog.KObj(oldPod), "node", klog.KRef("", nodeName))
 
 					// daemonset should continue running pod on the node
 					if shouldContinueRunning {
