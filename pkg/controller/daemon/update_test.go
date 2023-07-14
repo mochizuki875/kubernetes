@@ -87,7 +87,7 @@ func TestDaemonSetUpdatesPodsWithMaxSurge(t *testing.T) {
 	expectSyncDaemonSets(t, manager, ds, podControl, 5, 0, 0)
 	markPodsReady(podControl.podStore)
 
-	// surge is thhe controlling amount
+	// surge is the controlling amount
 	maxSurge := 2
 	ds.Spec.Template.Spec.Containers[0].Image = "foo2/bar2"
 	ds.Spec.UpdateStrategy = newUpdateSurge(intstr.FromInt(maxSurge))
@@ -113,6 +113,60 @@ func TestDaemonSetUpdatesPodsWithMaxSurge(t *testing.T) {
 
 	clearExpectations(t, manager, ds, podControl)
 	expectSyncDaemonSets(t, manager, ds, podControl, 0, 5%maxSurge, 0)
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, 0, 0, 0)
+}
+
+func TestDaemonSetUpdatesPodsNotMatchTainstWithMaxSurge(t *testing.T) {
+	_, ctx := ktesting.NewTestContext(t)
+
+	// Create DaemonSet with toleration
+	ds := newDaemonSetWithTolerations("foo")
+	manager, podControl, _, err := newTestController(ctx, ds)
+	if err != nil {
+		t.Fatalf("error creating DaemonSets controller: %v", err)
+	}
+
+	// add taint to one node
+	addNodesWithTaints(manager.nodeStore, 0, 5, 1, nil)
+	manager.dsStore.Add(ds)
+	expectSyncDaemonSets(t, manager, ds, podControl, 5, 0, 0)
+	markPodsReady(podControl.podStore)
+
+	// surge is the controlling amount
+	maxSurge := 1
+	ds.Spec.Template.Spec.Containers[0].Image = "foo2/bar2"
+	ds.Spec.UpdateStrategy = newUpdateSurge(intstr.FromInt(maxSurge))
+	// remove toleration from DaemonSet for update
+	ds.Spec.Template.Spec.Tolerations = nil
+	manager.dsStore.Update(ds)
+
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, maxSurge, 0, 0)
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, 0, 0, 0)
+	markPodsReady(podControl.podStore)
+
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, maxSurge, maxSurge, 0)
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, 0, 0, 0)
+	markPodsReady(podControl.podStore)
+
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, maxSurge, maxSurge, 0)
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, 0, 0, 0)
+	markPodsReady(podControl.podStore)
+
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, maxSurge, maxSurge, 0)
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, 0, 0, 0)
+	markPodsReady(podControl.podStore)
+
+	clearExpectations(t, manager, ds, podControl)
+	expectSyncDaemonSets(t, manager, ds, podControl, 0, maxSurge, 0)
 	clearExpectations(t, manager, ds, podControl)
 	expectSyncDaemonSets(t, manager, ds, podControl, 0, 0, 0)
 }

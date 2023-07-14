@@ -123,6 +123,43 @@ func newDaemonSet(name string) *apps.DaemonSet {
 	}
 }
 
+func newDaemonSetWithTolerations(name string) *apps.DaemonSet {
+	two := int32(2)
+	return &apps.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       uuid.NewUUID(),
+			Name:      name,
+			Namespace: metav1.NamespaceDefault,
+		},
+		Spec: apps.DaemonSetSpec{
+			RevisionHistoryLimit: &two,
+			UpdateStrategy: apps.DaemonSetUpdateStrategy{
+				Type: apps.OnDeleteDaemonSetStrategyType,
+			},
+			Selector: &metav1.LabelSelector{MatchLabels: simpleDaemonSetLabel},
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: simpleDaemonSetLabel,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Image:                  "foo/bar",
+							TerminationMessagePath: v1.TerminationMessagePathDefault,
+							ImagePullPolicy:        v1.PullIfNotPresent,
+							SecurityContext:        securitycontext.ValidSecurityContextWithContainerDefaults(),
+						},
+					},
+					DNSPolicy: v1.DNSDefault,
+					Tolerations: []v1.Toleration{
+						{Key: "node-role.kubernetes.io/control-plane", Operator: v1.TolerationOpExists},
+					},
+				},
+			},
+		},
+	}
+}
+
 func newRollingUpdateStrategy() *apps.DaemonSetUpdateStrategy {
 	one := intstr.FromInt32(1)
 	return &apps.DaemonSetUpdateStrategy{
@@ -160,9 +197,43 @@ func newNode(name string, label map[string]string) *v1.Node {
 	}
 }
 
+func newNodeWithTaints(name string, label map[string]string) *v1.Node {
+	return &v1.Node{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Labels:    label,
+			Namespace: metav1.NamespaceNone,
+		},
+		Spec: v1.NodeSpec{
+			Taints: []v1.Taint{
+				{Key: "node-role.kubernetes.io/control-plane", Effect: v1.TaintEffectNoSchedule},
+			},
+		},
+		Status: v1.NodeStatus{
+			Conditions: []v1.NodeCondition{
+				{Type: v1.NodeReady, Status: v1.ConditionTrue},
+			},
+			Allocatable: v1.ResourceList{
+				v1.ResourcePods: resource.MustParse("100"),
+			},
+		},
+	}
+}
+
 func addNodes(nodeStore cache.Store, startIndex, numNodes int, label map[string]string) {
 	for i := startIndex; i < startIndex+numNodes; i++ {
 		nodeStore.Add(newNode(fmt.Sprintf("node-%d", i), label))
+	}
+}
+
+func addNodesWithTaints(nodeStore cache.Store, startIndex, numNodes, numTaintNodes int, label map[string]string) {
+	for i := startIndex; i < startIndex+numNodes; i++ {
+		if i < numTaintNodes {
+			nodeStore.Add(newNodeWithTaints(fmt.Sprintf("node-%d", i), label))
+		} else {
+			nodeStore.Add(newNode(fmt.Sprintf("node-%d", i), label))
+		}
 	}
 }
 
